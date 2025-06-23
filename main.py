@@ -1,25 +1,32 @@
-import os
+
 import logging
-from telegram import Update, InputFile
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+import os
 import filetype
-from dotenv import load_dotenv
-
-load_dotenv()
-
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, ContextTypes, filters
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Привіт! Надішли мені фото або файл, і я визначу його тип.")
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-def handle_file(update: Update, context: CallbackContext):
-    file = update.message.document or update.message.photo[-1]
-    file_obj = file.get_file()
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Привіт! Надішли мені зображення або документ, і я скажу його тип.")
+
+async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    document = update.message.document
+    photo = update.message.photo
+
+    if photo:
+        file = await photo[-1].get_file()
+    elif document:
+        file = await document.get_file()
+    else:
+        await update.message.reply_text("Надішли фото або документ.")
+        return
+
     file_path = f"temp_{file.file_unique_id}"
-    file_obj.download(file_path)
+    await file.download_to_drive(file_path)
 
     kind = filetype.guess(file_path)
     if kind:
@@ -27,18 +34,16 @@ def handle_file(update: Update, context: CallbackContext):
     else:
         file_type = "Невідомий тип файлу"
 
-    update.message.reply_text(f"Тип файлу: {file_type}")
+    await update.message.reply_text(f"Тип файлу: {file_type}")
     os.remove(file_path)
 
 def main():
-    updater = Updater(TOKEN)
-    dp = updater.dispatcher
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.document | Filters.photo, handle_file))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.Document.ALL | filters.PHOTO, handle_file))
 
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
