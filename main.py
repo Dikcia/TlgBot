@@ -1,28 +1,31 @@
-import logging
-import os
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Налаштування логів
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+from telegram import Update, InputFile
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import filetype
 
-# Обробник команди /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привіт! Я твій бот.")
+    await update.message.reply_text("Привіт! Надішли мені зображення, і я скажу його тип.")
 
-# Основна функція запуску
-def main():
-    token = os.environ.get("BOT_TOKEN")
-    if not token:
-        raise ValueError("BOT_TOKEN not found in environment variables")
+async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    file = await update.message.photo[-1].get_file()
+    file_path = "/tmp/downloaded_image"
+    await file.download_to_drive(file_path)
 
-    application = ApplicationBuilder().token(token).build()
-    application.add_handler(CommandHandler("start", start))
-
-    application.run_polling()
+    kind = filetype.guess(file_path)
+    if kind is None:
+        await update.message.reply_text("Не вдалося визначити тип файлу.")
+    else:
+        await update.message.reply_text(f"Тип файлу: {kind.mime}")
 
 if __name__ == "__main__":
-    main()
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    TOKEN = os.getenv("BOT_TOKEN")
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_file))
+
+    app.run_polling()
