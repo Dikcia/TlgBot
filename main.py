@@ -1,31 +1,33 @@
 
-from telegram import Update, InputFile
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+import os
 import filetype
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Привіт! Надішли мені зображення, і я скажу його тип.")
+def start(update, context):
+    update.message.reply_text("Привіт! Надішли мені зображення, і я скажу його тип.")
 
-async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    file = await update.message.photo[-1].get_file()
-    file_path = "/tmp/downloaded_image"
-    await file.download_to_drive(file_path)
+def handle_photo(update, context):
+    photo = update.message.photo[-1]
+    file = photo.get_file()
+    file_path = "downloaded_image.jpg"
+    file.download(file_path)
 
     kind = filetype.guess(file_path)
     if kind is None:
-        await update.message.reply_text("Не вдалося визначити тип файлу.")
+        update.message.reply_text("Не вдалося визначити тип файлу.")
     else:
-        await update.message.reply_text(f"Тип файлу: {kind.mime}")
+        update.message.reply_text(f"Тип файлу: {kind.mime}")
 
-if __name__ == "__main__":
-    import os
-    from dotenv import load_dotenv
-    load_dotenv()
-
+def main():
     TOKEN = os.getenv("BOT_TOKEN")
-    app = ApplicationBuilder().token(TOKEN).build()
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_file))
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.photo, handle_photo))
 
-    app.run_polling()
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
